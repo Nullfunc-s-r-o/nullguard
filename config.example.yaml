@@ -1,0 +1,20 @@
+ai_analysis:
+  enabled: true
+  model: openrouter/google/gemma-3-27b-it:free
+  throttle_interval_seconds: 30
+  throttle_burst: 3
+alerting:
+  enabled: false
+  urls:
+    - "tgram://<BOT_TOKEN>/<CHAT_ID>"
+logs:
+  - path: "/var/log/syslog"
+    preset: "default"
+health_alerts:
+  cooldown_seconds: 300
+  thresholds:
+    cpu: 85.0
+    ram: 90.0
+    disk: 95.0
+    swap: 80.0
+    load: 4.0

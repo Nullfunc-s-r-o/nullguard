@@ -1,0 +1,59 @@
+[build-system]
+requires      = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name        = "nullguard"
+version     = "1.0.0"
+description = "AI-powered server observability with a reactive Textual TUI, C++ core, and multi-channel alerting"
+readme      = "README.md"
+license     = { file = "LICENSE" }
+requires-python = ">=3.12"
+keywords    = ["monitoring", "logging", "llm", "tui", "devops", "pybind11"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "Environment :: Console",
+    "Topic :: System :: Monitoring",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: POSIX :: Linux",
+]
+
+dependencies = [
+    "PyYAML>=6.0",
+    "rich>=13.0",
+    "typer>=0.12",
+    "litellm>=1.0",
+    "docker>=7.0",
+    "apprise>=2.0",
+    "pyperclip>=1.8",
+    "textual>=0.70.0",
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "pytest", "build"]
+
+[project.scripts]
+# Registers the global `nullguard` command after `pip install .`
+nullguard = "nullguard.cli:app"
+
+[project.urls]
+Homepage   = "https://github.com/Nullfunc-s-r-o/nullguard"
+Repository = "https://github.com/Nullfunc-s-r-o/nullguard"
+Issues     = "https://github.com/Nullfunc-s-r-o/nullguard/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nullguard*"]
+
+# ── Ruff linter config ────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

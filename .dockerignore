@@ -1,0 +1,44 @@
+# CMake and Build Artifacts
+build/
+out/
+bin/
+*.so
+*.o
+*.a
+*.pyd
+*.pdb
+*.ilk
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+.pytest_cache/
+
+# NullGuard specific local data & logs
+*.db
+*.db-shm
+*.db-wal
+*.pid
+data/
+*.log
+config.yaml
+test.txt
+test2.txt
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker sandbox (we don't want to copy the sandbox into the real container)
+docker_playground/

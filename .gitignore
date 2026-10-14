@@ -1,0 +1,48 @@
+# Build and C++ artifacts
+build/
+out/
+bin/
+*.so
+*.pyd
+*.pdb
+*.ilk
+*.o
+*.a
+
+# Python virtual environments & caches
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Databases, runtime state, and logs
+*.db
+*.db-wal
+*.db-shm
+*.pid
+data/
+*.log
+test.txt
+test2.txt
+
+# Local secrets & configs
+config.yaml
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Internal AI context
+AGENTS.md
+REPO_MAP.md
+
+# Internal AI Docs
+AGENTS.md
+REPO_MAP.md
