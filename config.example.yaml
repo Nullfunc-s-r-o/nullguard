@@ -1,0 +1,30 @@
+ai_analysis:
+  enabled: true
+  # Any LiteLLM-compatible model string.
+  # Prefix with 'openrouter/' to use OpenRouter:
+  model: "openrouter/anthropic/claude-3-haiku"
+  throttle_interval_seconds: 30
+  throttle_burst: 3
+
+alerting:
+  enabled: false
+  # Add as many Apprise-compatible URLs as you want.
+  # All URLs receive every incident alert simultaneously.
+  urls:
+    - "tgram://<BOT_TOKEN>/<CHAT_ID>"
+    - "discord://<WEBHOOK_ID>/<WEBHOOK_TOKEN>"
+    - "slack://<TOKEN>/<CHANNEL>"
+
+logs:
+  # Use 'preset: default' for the smart universal regex.
+  - path: "/var/log/syslog"
+    preset: "default"
+
+health_alerts:
+  cooldown_seconds: 300
+  thresholds:
+    cpu: 85.0
+    ram: 90.0
+    disk: 95.0
+    swap: 80.0
+    load: 4.0

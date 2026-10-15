@@ -1,0 +1,52 @@
+# Build and C++ artifacts
+build/
+out/
+bin/
+*.so
+*.pyd
+*.pdb
+*.ilk
+*.o
+*.a
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Python virtual environments & caches
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+dist/
+*.egg-info/
+.pytest_cache/
+
+# Databases, runtime state, and logs
+*.db
+*.db-wal
+*.db-shm
+*.pid
+data/
+.nullguard/
+*.log
+test.txt
+test2.txt
+
+# Local secrets & configs
+config.yaml
+
+# Landing
+landing/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Internal AI Docs
+AGENTS.md
+REPO_MAP.md
