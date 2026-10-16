@@ -214,20 +214,35 @@ class LLMThrottle:
 
 
 class SystemHealthMonitor:
-    """Fires Apprise alerts when OS metrics exceed user-configured thresholds."""
+    """Fires Apprise alerts when OS metrics exceed user-configured thresholds for a sustained duration."""
 
     CHECKS = {
-        "cpu":  ("cpu_usage_percent", "CPU Usage",       "%", 1),
-        "ram":  ("ram_usage_percent", "RAM Usage",       "%", 1),
-        "disk": ("disk_used_percent", "Disk Usage",      "%", 1),
-        "swap": ("swap_used_percent", "Swap Usage",      "%", 1),
-        "load": ("load_1m",           "Load Average 1m", "",  2),
+        "cpu":      ("cpu_usage_percent", "CPU Usage",        "%", 1),
+        "ram":      ("ram_usage_percent", "RAM Usage",        "%", 1),
+        "disk":     ("disk_used_percent", "Disk Usage",       "%", 1),
+        "swap":     ("swap_used_percent", "Swap Usage",       "%", 1),
+        "load":     ("load_1m",           "Load Average 1m",  "",  2),
+        "load_1m":  ("load_1m",           "Load Average 1m",  "",  2),
+        "load_5m":  ("load_5m",           "Load Average 5m",  "",  2),
+        "load_15m": ("load_15m",          "Load Average 15m", "",  2),
     }
 
-    def __init__(self, thresholds: Dict[str, float], cooldown_seconds: float = 300):
+    def __init__(
+        self,
+        thresholds: Dict[str, float],
+        cooldown_seconds: float = 300,
+        sustained_cycles: int = 3,
+        sustained_seconds: float = 0.0,
+        min_load_5m: Optional[float] = None,
+    ):
         self.thresholds = thresholds
         self.cooldown = cooldown_seconds
+        self.sustained_cycles = max(1, sustained_cycles)
+        self.sustained_seconds = sustained_seconds
+        self.min_load_5m = min_load_5m
         self._last_alert: Dict[str, float] = {}
+        self._breach_counts: Dict[str, int] = {}
+        self._breach_start: Dict[str, float] = {}
         self._firing: set = set()
 
     def check(self, metrics: Dict[str, float], ap_obj: Any, metrics_str: str) -> None:
@@ -239,37 +254,86 @@ class SystemHealthMonitor:
                 continue
             metrics_key, label, unit, precision = self.CHECKS[key]
             value = metrics.get(metrics_key, 0.0)
-            if value >= threshold:
-                if now - self._last_alert.get(key, 0.0) >= self.cooldown:
-                    self._last_alert[key] = now
-                    self._firing.add(key)
-                    threading.Thread(
-                        target=self._send_alert,
-                        args=(ap_obj, label, value, threshold, unit, precision, metrics_str),
-                        daemon=True,
-                    ).start()
+
+            # Check if value exceeds configured threshold
+            is_breached = value >= threshold
+
+            # Optional: correlate 5-minute Load Average with CPU to determine genuine system stress
+            if is_breached and key == "cpu" and self.min_load_5m is not None:
+                load_5m = metrics.get("load_5m", 0.0)
+                if load_5m < self.min_load_5m:
+                    is_breached = False
+
+            if is_breached:
+                # Track start time and consecutive breaches for debouncing
+                if self._breach_start.get(key) is None or self._breach_counts.get(key, 0) == 0:
+                    self._breach_start[key] = now
+
+                self._breach_counts[key] = self._breach_counts.get(key, 0) + 1
+                duration = now - self._breach_start[key]
+
+                # Ensure metric stays breached for sustained window before alerting
+                cycles_met = self._breach_counts[key] >= self.sustained_cycles
+                seconds_met = duration >= self.sustained_seconds if self.sustained_seconds > 0 else True
+
+                if cycles_met and seconds_met:
+                    if now - self._last_alert.get(key, 0.0) >= self.cooldown:
+                        self._last_alert[key] = now
+                        self._firing.add(key)
+
+                        sustained_desc = f"{self._breach_counts[key]} cycles"
+                        if duration >= 1.0:
+                            sustained_desc += f" (~{duration:.0f}s)"
+
+                        extra_info: Dict[str, str] = {}
+                        if key == "cpu":
+                            extra_info["5m Load Average"] = f"{metrics.get('load_5m', 0.0):.2f}"
+
+                        threading.Thread(
+                            target=self._send_alert,
+                            args=(
+                                ap_obj, label, value, threshold, unit, precision,
+                                metrics_str, None, sustained_desc, extra_info
+                            ),
+                            daemon=True,
+                        ).start()
             else:
+                # Metric returned to normal: reset debounce tracking
+                self._breach_counts[key] = 0
+                self._breach_start[key] = None
                 self._firing.discard(key)
 
     @staticmethod
     def _send_alert(ap_obj: Any, label: str, value: float,
                     threshold: float, unit: str, precision: int,
                     metrics_str: str,
-                    hostname: Optional[str] = None) -> None:
+                    hostname: Optional[str] = None,
+                    sustained_desc: Optional[str] = None,
+                    extra_info: Optional[Dict[str, str]] = None) -> None:
         try:
             host = hostname or socket.gethostname()
             curr_str = f"{value:.{precision}f}{unit}"
             thresh_str = f"{threshold:.{precision}f}{unit}"
-            body = (
-                f"**System Health Alert: High {label}**\n\n"
-                f"- **Host:** {host}\n"
-                f"- **Metric:** {label}\n"
-                f"- **Current Value:** **{curr_str}**\n"
-                f"- **Threshold:** **{thresh_str}**\n"
-                f"- **Status:** Threshold Exceeded\n\n"
-                f"**System Snapshot:**\n"
-                f"```text\n{metrics_str}\n```"
-            )
+
+            lines = [
+                f"**System Health Alert: High {label}**\n",
+                f"- **Host:** {host}",
+                f"- **Metric:** {label}",
+                f"- **Current Value:** **{curr_str}**",
+                f"- **Threshold:** **{thresh_str}**",
+            ]
+            if sustained_desc:
+                lines.append(f"- **Sustained Duration:** **{sustained_desc}**")
+            if extra_info:
+                for k, v in extra_info.items():
+                    lines.append(f"- **{k}:** {v}")
+            lines.extend([
+                "- **Status:** Threshold Exceeded",
+                "",
+                "**System Snapshot:**",
+                f"```text\n{metrics_str}\n```",
+            ])
+            body = "\n".join(lines)
             ap_obj.notify(
                 title=f"⚠️ [{host}] NullGuard: High {label}",
                 body=body,

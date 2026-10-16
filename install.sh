@@ -6,61 +6,73 @@ set -euo pipefail
 echo "=== NullGuard Automated Installer ==="
 echo ""
 
-# ── 1. Check Python & System Prerequisites ────────────────────────────────
+# ── 1. Check System Prerequisites & Dependencies ──────────────────────────
+MISSING_PACKAGES=()
+MISSING_DESCRIPTIONS=()
 
-# 1.1 Python binary check
+# 1.1 Check cmake
+if ! command -v cmake &>/dev/null; then
+    MISSING_PACKAGES+=("cmake")
+    MISSING_DESCRIPTIONS+=("cmake (C++ build configuration tool)")
+fi
+
+# 1.2 Check g++
+if ! command -v g++ &>/dev/null; then
+    MISSING_PACKAGES+=("g++")
+    MISSING_DESCRIPTIONS+=("g++ (C++ compiler)")
+fi
+
+# 1.3 Check git (required for CMake FetchContent)
+if ! command -v git &>/dev/null; then
+    MISSING_PACKAGES+=("git")
+    MISSING_DESCRIPTIONS+=("git (version control for CMake FetchContent)")
+fi
+
+# 1.4 Check curl (required for pip bootstrap and downloads)
+if ! command -v curl &>/dev/null; then
+    MISSING_PACKAGES+=("curl")
+    MISSING_DESCRIPTIONS+=("curl (HTTP client for pip bootstrap)")
+fi
+
+# 1.5 Check Python 3 interpreter and packages
 if ! command -v python3 &>/dev/null; then
-    echo "✗ Python 3 is not installed."
-    echo "  On Debian/Ubuntu, install with:"
-    echo "    sudo apt update && sudo apt install -y python3 python3-venv python3-dev"
+    MISSING_PACKAGES+=("python3" "python3-venv" "python3-dev")
+    MISSING_DESCRIPTIONS+=("python3 (Python 3 interpreter)" "python3-venv (Python virtual environment module)" "python3-dev (Python development headers)")
+else
+    # Check python3-venv module
+    if ! python3 -c "import venv" 2>/dev/null; then
+        MISSING_PACKAGES+=("python3-venv")
+        MISSING_DESCRIPTIONS+=("python3-venv (Python virtual environment module)")
+    fi
+
+    # Check python3-dev headers (Python.h needed for pybind11)
+    if ! python3 -c "import sysconfig, os; exit(0 if os.path.exists(os.path.join(sysconfig.get_path('include'), 'Python.h')) else 1)" 2>/dev/null; then
+        MISSING_PACKAGES+=("python3-dev")
+        MISSING_DESCRIPTIONS+=("python3-dev (Python development C-headers for pybind11)")
+    fi
+fi
+
+# If any dependencies are missing, print a single combined error message
+if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
+    echo "✗ Missing required system dependencies:"
+    for desc in "${MISSING_DESCRIPTIONS[@]}"; do
+        echo "  - $desc"
+    done
+    echo ""
+    echo "Install all missing packages by running:"
+    echo "  sudo apt update && sudo apt install -y ${MISSING_PACKAGES[*]}"
+    echo ""
     exit 1
 fi
 
-# 1.2 Python version requirement (3.12+)
+# 1.6 Verify Python version requirement (3.12+)
 if ! python3 -c "import sys; assert sys.version_info >= (3, 12)" 2>/dev/null; then
     CURRENT_PY=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "unknown")
     echo "✗ Python 3.12+ is required (found Python $CURRENT_PY)."
     echo "  Please install Python 3.12 or newer."
     exit 1
 fi
-echo "✓ Python $(python3 --version | awk '{print $2}') detected"
-
-# 1.3 Python venv module check (Issue 1: Ubuntu strips venv/ensurepip)
-if ! python3 -c "import venv" 2>/dev/null; then
-    PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3")
-    echo "✗ Python 'venv' module is missing (commonly stripped in Debian/Ubuntu packages)."
-    echo "  Please install it using:"
-    echo "    sudo apt update && sudo apt install -y python${PY_VER}-venv (or sudo apt install -y python3-venv)"
-    exit 1
-fi
-echo "✓ Python venv module available"
-
-# 1.4 Python development C-headers check (Issue 3: Python.h needed for pybind11)
-if ! python3 -c "import sysconfig, os; exit(0 if os.path.exists(os.path.join(sysconfig.get_path('include'), 'Python.h')) else 1)" 2>/dev/null; then
-    PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3")
-    echo "✗ Python development headers ('Python.h') not found."
-    echo "  The C++20 core (pybind11) requires Python C-headers to compile."
-    echo "  Please install them using:"
-    echo "    sudo apt update && sudo apt install -y python${PY_VER}-dev (or sudo apt install -y python3-dev)"
-    exit 1
-fi
-echo "✓ Python development headers present"
-
-# 1.5 Build tools check (Issue 4: cmake and g++)
-MISSING_TOOLS=()
-for tool in cmake g++; do
-    if ! command -v "$tool" &>/dev/null; then
-        MISSING_TOOLS+=("$tool")
-    fi
-done
-
-if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
-    echo "✗ Missing required build tool(s): ${MISSING_TOOLS[*]}"
-    echo "  Please install build dependencies using:"
-    echo "    sudo apt update && sudo apt install -y build-essential cmake"
-    exit 1
-fi
-echo "✓ Build tools present (cmake, g++)"
+echo "✓ System prerequisites satisfied (Python $(python3 --version | awk '{print $2}'), venv, dev headers, cmake, g++, git, curl)"
 
 # ── 2. Setup Directories & Self-Healing Virtual Environment ───────────────
 INSTALL_DIR="${HOME}/.nullguard"
@@ -70,7 +82,7 @@ echo ""
 echo "Setting up NullGuard at $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
 
-# Issue 2: Handle corrupted or incomplete virtual environment
+# Handle corrupted or incomplete virtual environment
 if [ -d "$VENV_DIR" ]; then
     if [ ! -x "$VENV_DIR/bin/python" ] || [ ! -x "$VENV_DIR/bin/pip" ] || ! "$VENV_DIR/bin/python" -c "import sys" 2>/dev/null; then
         echo "⚠ Detected corrupted or incomplete virtual environment at $VENV_DIR."
@@ -80,8 +92,10 @@ if [ -d "$VENV_DIR" ]; then
 fi
 
 if [ ! -d "$VENV_DIR" ]; then
-    echo "Creating virtual environment at $VENV_DIR..."
-    python3 -m venv "$VENV_DIR"
+    echo "Creating virtual environment at $VENV_DIR (fast mode without ensurepip)..."
+    python3 -m venv --without-pip "$VENV_DIR"
+    echo "Bootstrapping latest pip via get-pip.py..."
+    curl -sS https://bootstrap.pypa.io/get-pip.py | "$VENV_DIR/bin/python"
 else
     echo "Using existing virtual environment at $VENV_DIR..."
 fi
@@ -94,9 +108,6 @@ if [ ! -x "$PYTHON_BIN" ] || [ ! -x "$PIP_BIN" ]; then
     echo "  Please remove $VENV_DIR and ensure python3-venv is properly installed."
     exit 1
 fi
-
-# Ensure pip is up to date inside the venv
-"$PIP_BIN" install --upgrade pip --quiet
 echo "✓ Virtual environment initialized"
 
 # ── 3. Build C++ Core ─────────────────────────────────────────────────────
@@ -105,8 +116,35 @@ echo "Building C++ core (pybind11)..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-cmake -B build -DCMAKE_BUILD_TYPE=Release -Wno-dev -DCMAKE_POLICY_DEFAULT_CMP0177=NEW 2>&1 | tail -3
-cmake --build build --parallel 2>&1 | tail -3
+# Clean up stale or relocated CMake cache if directory moved (e.g. mounted in Docker)
+if [ -d "build" ] && [ ! -f "build/CMakeCache.txt" ]; then
+    echo "⚠ Detected incomplete build directory without CMakeCache.txt."
+    echo "  Resetting build directory..."
+    rm -rf build
+    rm -f "${SCRIPT_DIR}"/nullguard_core*.so
+elif [ -f "build/CMakeCache.txt" ]; then
+    CACHE_SRC=$(grep -E "^CMAKE_HOME_DIRECTORY:INTERNAL=" build/CMakeCache.txt 2>/dev/null | cut -d= -f2 || true)
+    CACHE_DIR=$(grep -E "^CMAKE_CACHEFILE_DIR:INTERNAL=" build/CMakeCache.txt 2>/dev/null | cut -d= -f2 || true)
+    if [ -z "$CACHE_SRC" ] || [ -z "$CACHE_DIR" ] || [ "$CACHE_SRC" != "$SCRIPT_DIR" ] || [ "$CACHE_DIR" != "${SCRIPT_DIR}/build" ]; then
+        echo "⚠ Detected relocated or mismatched CMake cache ($CACHE_SRC -> $SCRIPT_DIR)."
+        echo "  Resetting build directory and stale artifacts for clean rebuild..."
+        rm -rf build
+        rm -f "${SCRIPT_DIR}"/nullguard_core*.so
+    fi
+fi
+
+# Clean previous extension artifacts in root to prevent ABI/Python version mismatches
+rm -f "${SCRIPT_DIR}"/nullguard_core*.so
+
+# Configure with self-healing fallback if configuration fails
+if ! cmake -B build -DCMAKE_BUILD_TYPE=Release -Wno-dev -DCMAKE_POLICY_DEFAULT_CMP0177=NEW; then
+    echo "⚠ CMake configuration failed. Retrying with a clean build directory..."
+    rm -rf build
+    rm -f "${SCRIPT_DIR}"/nullguard_core*.so
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -Wno-dev -DCMAKE_POLICY_DEFAULT_CMP0177=NEW
+fi
+
+cmake --build build --parallel
 echo "✓ nullguard_core built successfully"
 
 # ── 4. Install Python package ─────────────────────────────────────────────
@@ -137,10 +175,20 @@ echo "✓ Copied nullguard_core extension to $SITE_PACKAGES"
 
 # ── 6. Create Global CLI Symlink ──────────────────────────────────────────
 echo ""
-LOCAL_BIN="${HOME}/.local/bin"
-mkdir -p "$LOCAL_BIN"
+GLOBAL_BIN="/usr/local/bin"
+FALLBACK_BIN="${HOME}/.local/bin"
 
-SYMLINK_PATH="${LOCAL_BIN}/nullguard"
+if [ -w "$GLOBAL_BIN" ] 2>/dev/null || { [ ! -e "$GLOBAL_BIN" ] && [ -w "/usr/local" ] 2>/dev/null; }; then
+    TARGET_BIN="$GLOBAL_BIN"
+    IS_SYSTEM_WIDE=true
+else
+    TARGET_BIN="$FALLBACK_BIN"
+    IS_SYSTEM_WIDE=false
+fi
+
+mkdir -p "$TARGET_BIN"
+
+SYMLINK_PATH="${TARGET_BIN}/nullguard"
 ln -sf "$VENV_DIR/bin/nullguard" "$SYMLINK_PATH"
 echo "✓ Created global symlink: $SYMLINK_PATH -> $VENV_DIR/bin/nullguard"
 
@@ -152,10 +200,10 @@ else
     exit 1
 fi
 
-# ── 7. Check $PATH Configuration (Issue 5) ────────────────────────────────
-if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
+# ── 7. Check $PATH Configuration (Fallback for ~/.local/bin) ──────────────
+if [ "$IS_SYSTEM_WIDE" = false ] && [[ ":$PATH:" != *":$TARGET_BIN:"* ]]; then
     echo ""
-    echo "⚠  WARNING: $LOCAL_BIN is not currently in your \$PATH."
+    echo "⚠  WARNING: $TARGET_BIN is not currently in your \$PATH."
 
     # Detect shell configuration file
     SHELL_RC=""
@@ -177,7 +225,7 @@ if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
     fi
 
     if [ "$ALREADY_CONFIGURED" = true ]; then
-        echo "   $LOCAL_BIN is already configured in $SHELL_RC, but not active in this session."
+        echo "   $TARGET_BIN is already configured in $SHELL_RC, but not active in this session."
         echo "   To apply immediately, run:"
         echo "     source $SHELL_RC"
     else

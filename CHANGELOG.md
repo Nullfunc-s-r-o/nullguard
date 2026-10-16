@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-10-16
+
+### Fixed
+- **Unified Installer Prerequisite Collection (`install.sh`)**:
+  - Replaced sequential fail-fast checks with comprehensive dependency accumulation across `cmake`, `g++`, `git`, `curl`, `python3-venv`, and `python3-dev`.
+  - Installer now prints a single consolidated diagnostic summary and provides a complete, one-line `sudo apt install -y <all_missing_packages>` command instead of requiring multiple rerun cycles.
+- **Fast Venv Creation & Self-Healing (`install.sh`)**:
+  - Accelerated venv bootstrap using `python3 -m venv --without-pip` paired with streaming `get-pip.py` download, bypassing the slow `ensurepip` wheel extraction bottleneck on container/WSL file systems.
+  - Retained self-healing recovery to automatically clean up and recreate the venv if binary executables (`python`, `pip`) are corrupted or missing.
+- **System Health Alert Debouncing & Sustained Thresholds (`SystemHealthMonitor`)**:
+  - Implemented consecutive breach count debouncing (`sustained_cycles`, default: `3`) and sustained duration checking (`sustained_seconds`) to eliminate false-positive alerts on momentary single-cycle spikes (e.g. cron job bursts).
+  - Added optional 5-minute load average correlation (`min_load_5m`) for CPU alerts to distinguish transient single-thread bursts from true sustained multi-core exhaustion.
+  - Automatically resets debounce counters and duration timers as soon as metrics recover below threshold.
+  - Added support for `"load_5m"` and `"load_15m"` metric threshold configuration.
+  - Enriched Markdown alert notifications with sustained breach duration and 5-minute load average context.
+- **CMake & FetchContent Cache Relocation Self-Healing (`install.sh`)**:
+  - Automatically detects relocated or mismatched `CMakeCache.txt` (e.g. when mounting local project directories into Docker containers at `/app`), cleanly purging the entire `build/` directory and root `.so` artifacts to ensure `FetchContent` (`build/_deps`) downloads and compiles `pybind11` cleanly for the current environment.
+  - Adds self-healing fallback retry with full directory purge if CMake configuration fails.
+- **Root/Privileged Global Symlink (`install.sh`)**:
+  - Automatically installs the global symlink directly to `/usr/local/bin/nullguard` when running with write permissions (e.g. root/sudo in Docker containers), bypassing `$PATH` warnings and `.bashrc` modifications for immediate out-of-the-box execution.
+  - Cleanly falls back to `~/.local/bin/nullguard` with the interactive `.bashrc` prompt for unprivileged user environments.
+- **Graceful CLI Editor Fallback (`nullguard config`)**:
+  - Wrapped `click.edit()` in exception handling to catch missing terminal editors (`nano`, `vim`) in minimal container environments without dumping raw tracebacks, displaying actionable direct-edit paths and installation advice.
+
 ## [1.0.1] - 2026-10-16
 
 ### Fixed

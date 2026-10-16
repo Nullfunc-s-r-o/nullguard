@@ -222,6 +222,9 @@ def run_daemon(
     health_monitor = SystemHealthMonitor(
         thresholds={k: float(v) for k, v in health_cfg.get("thresholds", {}).items()},
         cooldown_seconds=float(health_cfg.get("cooldown_seconds", 300)),
+        sustained_cycles=int(health_cfg.get("sustained_cycles", 3)),
+        sustained_seconds=float(health_cfg.get("sustained_seconds", 0.0)),
+        min_load_5m=float(health_cfg["min_load_5m"]) if "min_load_5m" in health_cfg else None,
     )
 
     conn = init_db(db_path)

@@ -127,6 +127,7 @@ def _run_wizard(config_path: str) -> None:
         "alerting": {"enabled": alert_enabled, "urls": urls},
         "health_alerts": {
             "cooldown_seconds": 300,
+            "sustained_cycles": 3,
             "thresholds": {"cpu": 85.0, "ram": 90.0, "disk": 95.0, "swap": 80.0, "load": 4.0},
         },
         "logs": [{"path": log_path, "preset": "default"}],
@@ -290,7 +291,13 @@ def cmd_config(
 
     console.print(f"Opening [bold]{config_path}[/bold] in your terminal editor...")
     import click
-    click.edit(filename=config_path)
+    try:
+        click.edit(filename=config_path)
+    except (click.ClickException, Exception):
+        console.print(
+            f"[yellow]No terminal editor found (e.g. nano, vim). Please edit the file directly at: {config_path}[/yellow]"
+        )
+        console.print("[yellow]Or install an editor: sudo apt install -y nano[/yellow]")
 
 
 @app.command("status")

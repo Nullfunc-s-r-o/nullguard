@@ -18,7 +18,7 @@
 | **Smart Incident Windows**   | 3-second sliding windows aggregate and deduplicate burst errors into a single incident (SHA256 hashing strips ephemeral data like timestamps and memory addresses). |
 | **Instant UI Feedback**      | Incident cards appear immediately with a `⏳ Analyzing...` placeholder. The AI result updates the card in-place when the LLM responds.                               |
 | **AI Root Cause Analysis**   | LiteLLM integration (OpenAI, Claude, Gemini, OpenRouter, etc.) generates concise RCA and mitigation advice per incident.                                            |
-| **Universal Alerting**       | Apprise integration dispatches incident and health alerts to Telegram, Discord, Slack, and 80+ other services simultaneously in clean DevOps Markdown.              |
+| **Universal Alerting**       | Apprise integration dispatches incident and debounced system health alerts to Telegram, Discord, Slack, and 80+ other services simultaneously in clean DevOps Markdown.              |
 | **Reactive Textual TUI**     | Modern terminal dashboard with sticky OS metrics, smooth scrolling (`[↑]`/`[↓]`, `[PgUp]`/`[PgDn]`, `[J]`/`[K]`, mouse wheel), line numbering, and `[Y]` copy.      |
 | **OS & Hardware Metrics**    | CPU, RAM, Disk, Swap, Load Average (1/5/15m), Total Processes, Zombie Processes — read natively from `/proc`.                                                       |
 | **Docker Awareness**         | Queries `/var/run/docker.sock` to show running vs. total container counts.                                                                                          |
@@ -74,13 +74,14 @@
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.12+ (with `python3-venv` and development headers `python3-dev`)
 - CMake 3.14+
-- GCC / Clang with C++17/C++20 support
+- GCC / Clang (`g++` with C++20 support)
+- `git` and `curl` (for CMake dependency fetching and pip bootstrapping)
 
 ### Option A: Fully Automated Native Install (Recommended)
 
-Our automated script acts like a standard installer. It creates an isolated environment in `~/.nullguard`, builds the C++ module, installs the Python dependencies, and symlinks the `nullguard` command globally.
+Our self-healing automated script validates all prerequisites in a single pass, creates a fast isolated environment in `~/.nullguard` (bootstrapped directly via `get-pip.py`), builds the C++ module, installs dependencies, and creates a global `nullguard` command (in `/usr/local/bin` when running as root/sudo, or `~/.local/bin` for unprivileged users).
 
 ```bash
 # 1. Clone the repository
@@ -175,13 +176,25 @@ logs:
 
 health_alerts:
   cooldown_seconds: 300
+  sustained_cycles: 3       # Debounce: alert only if metric breaches threshold for N consecutive polls
+  sustained_seconds: 0      # Optional: require breach to persist for N seconds (e.g. 120)
+  min_load_5m: 1.0          # Optional: require 5m load average >= threshold for CPU alerts
   thresholds:
     cpu: 85.0
     ram: 90.0
     disk: 95.0
     swap: 80.0
     load: 4.0
+    load_5m: 3.5
 ```
+
+### System Health Alert Debouncing
+
+To eliminate false alarms caused by transient single-second spikes (such as a cron job or compiler burst), NullGuard includes an alert debouncing engine:
+- **`sustained_cycles`**: Requires the metric to continuously breach the configured threshold for $N$ consecutive polling cycles (default: `3`) before triggering an alert.
+- **`sustained_seconds`**: Optional time window in seconds that the breach must persist.
+- **`min_load_5m`**: Optional 5-minute load average gate for CPU alerts to distinguish momentary single-thread bursts from true multi-core system exhaustion.
+- **Automatic Reset**: If the metric drops back below the threshold before the sustained criteria are met, the debounce counter and duration timer are instantly reset.
 
 ### LLM API Keys
 
