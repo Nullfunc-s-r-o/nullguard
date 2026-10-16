@@ -22,6 +22,9 @@ logs:
 
 health_alerts:
   cooldown_seconds: 300
+  sustained_cycles: 3       # Debounce: alert only if metric breaches threshold for N consecutive polls
+  sustained_seconds: 0      # Optional: require breach to persist for N seconds (e.g. 120)
+  min_load_5m: 1.0          # Optional: require 5m load average >= threshold for CPU alerts
   thresholds:
     cpu: 85.0
     ram: 90.0
