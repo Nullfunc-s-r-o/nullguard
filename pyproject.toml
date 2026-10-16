@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name        = "nullguard"
-version     = "1.0.0"
+version     = "1.0.1"
 description = "AI-powered server observability with a reactive Textual TUI, C++ core, and multi-channel alerting"
 readme      = "README.md"
 license     = { file = "LICENSE" }

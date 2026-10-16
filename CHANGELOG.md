@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-10-16
+
+### Fixed
+- **Installer Resilience & Self-Healing (`install.sh`)**:
+  - Added early pre-flight check for Python `venv` module to cleanly notify and guide users on minimal Debian/Ubuntu environments where `python3-venv` is stripped.
+  - Implemented automatic self-healing recovery for incomplete or corrupted virtual environments (`~/.nullguard/venv`), validating binary executability and cleanly rebuilding if broken.
+  - Added pre-flight check for Python C-headers (`Python.h`) to catch missing `python3-dev` prior to CMake/pybind11 compilation.
+  - Added build tool validation for `cmake` and `g++`, providing the exact `build-essential cmake` installation command if absent.
+  - Improved `$PATH` resolution: detects user shell configuration (`~/.zshrc`, `~/.bashrc`, `~/.profile`), avoids duplicate PATH exports, and offers an interactive `[Y/n]` prompt to automatically configure `~/.local/bin`.
+
 ## [1.0.0] - 2026-10-14
 
 ### Added
